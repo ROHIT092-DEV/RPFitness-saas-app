@@ -2,17 +2,22 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface User {
   _id: string;
-  fullName: string;
+  name?: string;
+  fullName?: string; // optional - some responses use `name`
   email: string;
   role: string;
 }
 
 interface AuthState {
   user: User | null;
+  accessToken: string | null;
+  refreshToken: string | null;
 }
 
 const initialState: AuthState = {
   user: null,
+  accessToken: null,
+  refreshToken: null,
 };
 
 const authSlice = createSlice({
@@ -22,11 +27,20 @@ const authSlice = createSlice({
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
     },
-    logout: (state) => {
+    setTokens: (
+      state,
+      action: PayloadAction<{ accessToken: string; refreshToken: string }>
+    ) => {
+      state.accessToken = action.payload.accessToken;
+      state.refreshToken = action.payload.refreshToken;
+    },
+    clearAuth: (state) => {
       state.user = null;
+      state.accessToken = null;
+      state.refreshToken = null;
     },
   },
 });
 
-export const { setUser, logout } = authSlice.actions;
+export const { setUser, setTokens, clearAuth } = authSlice.actions;
 export default authSlice.reducer;

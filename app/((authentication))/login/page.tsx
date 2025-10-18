@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 import Image from 'next/image';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { AppDispatch } from '@/app/store/store';
-import { setUser } from '@/app/store/authSlice';
+import { setUser, setTokens } from '@/app/store/authSlice';
 
 export default function Login() {
   const dispatch = useDispatch<AppDispatch>();
@@ -16,40 +16,67 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // no toast provider used — inline errors only
 
   const handleSubmit = async (e: React.FormEvent) => {
     console.log(process.env.NEXT_PUBLIC_API_URL);
     e.preventDefault();
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/users/login`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email, password }),
+      // Using explicit backend URL requested by user
+      const response = await fetch('http://localhost:5000/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      // Try to parse body safely, even on non-JSON responses
+      const tryParseJson = async (res: Response) => {
+        try {
+          return await res.json();
+        } catch (_) {
+          return null;
         }
-      );
+      };
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
+        const errorData = await tryParseJson(response);
+        const message = (errorData && (errorData.message || errorData.error)) || `${response.status} ${response.statusText}` || 'Login failed';
+        setError(message);
+        return;
       }
-      setLoading(false);
 
-      const data = await response.json();
-      dispatch(setUser(data.user)); // Save user to Redux
-      // console.log(data.user);
-      // login successful
+      const data = (await tryParseJson(response)) || {};
+      // API returns { user, accessToken, refreshToken }
+      const user = data.user;
+      const accessToken = data.accessToken;
+      const refreshToken = data.refreshToken;
 
-      // success: fetchMe is already handled by the fulfilled payload or you can dispatch(fetchMe())
+      if (user) {
+        dispatch(setUser(user)); // Save user to Redux
+      }
+      if (accessToken && refreshToken) {
+        dispatch(setTokens({ accessToken, refreshToken }));
+        // persist tokens for logout call from other components
+        try {
+          localStorage.setItem('accessToken', accessToken);
+          localStorage.setItem('refreshToken', refreshToken);
+        } catch (e) {
+          // ignore storage errors in SSR contexts
+        }
+      }
+
+      // login successful — navigate to home
       router.push('/');
     } catch (err) {
-      // error stored in slice; you can show toast or inline
       console.error('login failed', err);
+      const message = (err as Error).message || 'Login failed';
+      setError(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -103,6 +130,11 @@ export default function Login() {
             >
               {loading ? 'Logging in...' : 'Login'}
             </button>
+            {error && (
+              <div className="mt-3 text-sm text-red-400" role="alert">
+                {error}
+              </div>
+            )}
           </form>
         </div>
       </div>

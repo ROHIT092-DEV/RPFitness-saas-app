@@ -3,7 +3,7 @@
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
 import { useRouter } from 'next/navigation';
-import { logout } from '../store/authSlice';
+import { clearAuth } from '../store/authSlice';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -13,11 +13,28 @@ export default function ProfilePage() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    await fetch('http://localhost:4000/api/users/logout', {
-      method: 'POST',
-      credentials: 'include',
-    });
-    dispatch(logout());
+    try {
+      const refreshToken =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('refreshToken')
+          : null;
+      await fetch('http://localhost:5000/api/v1/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch (e) {
+      console.error('logout failed', e);
+    }
+
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+    } catch (e) {}
+
+    dispatch(clearAuth());
     router.push('/login');
   };
 

@@ -20,7 +20,7 @@ import { Home, Phone, Info } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from './ui/button';
 import { useDispatch } from 'react-redux';
-import { logout } from '@/app/store/authSlice';
+import { clearAuth } from '@/app/store/authSlice';
 
 function Header() {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -34,11 +34,29 @@ function Header() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    await fetch('http://localhost:4000/api/users/logout', {
-      method: 'POST',
-      credentials: 'include',
-    });
-    dispatch(logout());
+    try {
+      const refreshToken =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('refreshToken')
+          : null;
+      await fetch('http://localhost:5000/api/v1/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch (e) {
+      // ignore network errors and continue to clear client state
+      console.error('logout request failed', e);
+    }
+
+    // clear client auth state
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+    } catch (e) {}
+    dispatch(clearAuth());
     router.push('/login');
   };
 
@@ -144,48 +162,42 @@ function Header() {
           </div>
         </div>
         <div>
-          <AlertDialog>
-            <AlertDialogTrigger className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-lg font-semibold text-black cursor-pointer">
-              {/* {user ? (
-                 {user?.fullName
-                .split(' ')
-                .map((word) => word[0])
-                .join('')}
-              ) : (
-                'U'
-              )} */}
-
-              {user ? (
-                <>
-                  {user?.fullName
+          {user ? (
+            <AlertDialog>
+              <AlertDialogTrigger className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-lg font-semibold text-black cursor-pointer">
+                {(() => {
+                  const name = user.fullName || user.name || user.email || '';
+                  return name
                     .split(' ')
+                    .filter(Boolean)
                     .map((word) => word[0])
-                    .join('')}
-                </>
-              ) : (
-                <>
-                  <Link href="/login">
-                    <Button>Login</Button>
-                  </Link>
-                </>
-              )}
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete
-                  your account and remove your data from our servers.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction>
-                  <Button onClick={handleLogout}>Logout</Button>
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                    .join('')
+                    .toUpperCase();
+                })()}
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete
+                    your account and remove your data from our servers.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  {/* AlertDialogAction already renders a button and applies button styles, so
+                      call handleLogout directly on it instead of nesting another <Button>. */}
+                  <AlertDialogAction onClick={handleLogout}>
+                    Logout
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : (
+            <Button asChild>
+              <Link href="/login">Login</Link>
+            </Button>
+          )}
         </div>
       </div>
     </div>
